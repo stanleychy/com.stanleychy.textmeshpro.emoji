@@ -30,6 +30,9 @@ namespace TMP_Emoji.Editor
             };
             root.Add(emojiJsonFileField);
 
+            IntegerField emojiSizeField = new IntegerField("Emoji Size");
+            root.Add(emojiSizeField);
+
             EnumField emojiPlatformField = new EnumField("Target Platform", TMP_EmojiPlatformType.Twitter);
             root.Add(emojiPlatformField);
 
@@ -38,7 +41,7 @@ namespace TMP_Emoji.Editor
                 text = "Generate TextMeshPro Emoji Sprite Asset"
             };
             generateButton.clicked += () => TMP_EmojiSpriteSheetGenerator.GenerateEmojiSpriteData((Texture2D)emojiSpriteSheetField.value,
-                (TextAsset)emojiJsonFileField.value, (TMP_EmojiPlatformType)emojiPlatformField.value);
+                (TextAsset)emojiJsonFileField.value, (TMP_EmojiPlatformType)emojiPlatformField.value, emojiSizeField.value);
             root.Add(generateButton);
         }
     }
