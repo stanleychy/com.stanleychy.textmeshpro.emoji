@@ -1,0 +1,1 @@
+# com.stanleychy.textmeshpro.emoji
