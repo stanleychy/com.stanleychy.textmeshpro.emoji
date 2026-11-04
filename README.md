@@ -4,6 +4,17 @@ This package is intended to support emoji with TextMesh Pro sprite feature. By p
 generate TextMesh Pro Sprite Asset from an emoji sprite sheet developers will be able to use unicode in text and let
 TextMesh Pro handle the sprite mapping and display by unicode.
 
+# Requirements
+
+- Unity 2022.3 or newer
+- TextMesh Pro
+    - Unity 6 / 2023.2+: TextMesh Pro is part of the built-in `com.unity.ugui` package, nothing extra to install
+    - Unity 2022.3: install `com.unity.textmeshpro` (3.0.x) from the Package Manager if your project doesn't already
+      have it
+
+In both cases, import <b>Window > TextMeshPro > Import TMP Essential Resources</b> so the `TextMeshPro/Sprite` shader
+is available.
+
 # Installation
 
 ### Via manifest.json

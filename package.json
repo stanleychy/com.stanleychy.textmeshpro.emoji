@@ -1,6 +1,6 @@
 {
   "name": "com.stanleychy.textmeshpro.emoji",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "TextMeshPro Emoji",
   "description": "This is an editor tool to make integrating Emoji with TextMeshPro easier",
   "unity": "2022.3",
@@ -11,7 +11,7 @@
   "licensesUrl": "https://github.com/stanleychy/com.stanleychy.textmeshpro.emoji/blob/main/LICENSE",
   "dependencies": {
     "com.unity.2d.sprite": "1.0.0",
-    "com.unity.textmeshpro": "3.0.8"
+    "com.unity.ugui": "1.0.0"
   },
   "keywords": [
     "TextMeshPro",
