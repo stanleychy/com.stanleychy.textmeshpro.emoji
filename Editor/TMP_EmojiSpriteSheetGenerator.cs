@@ -3,7 +3,6 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using TMPro;
-using TMPro.EditorUtilities;
 using UnityEditor;
 using UnityEditor.U2D.Sprites;
 using UnityEngine;
@@ -99,26 +98,146 @@ namespace TMP_Emoji.Editor
             Texture2D emojiTexture, int emojiSize)
         {
             string emojiTexturePath = AssetDatabase.GetAssetPath(emojiTexture);
+            string spriteAssetPath = Path.ChangeExtension(emojiTexturePath, "asset");
             int glyphSize = emojiSize / 2;
 
-            Selection.activeObject = emojiTexture;
-            TMP_SpriteAssetMenu.CreateSpriteAsset();
-
-            TMP_SpriteAsset tmpEmojiSpriteAsset =
-                AssetDatabase.LoadAssetAtPath<TMP_SpriteAsset>(Path.ChangeExtension(emojiTexturePath, "asset"));
-
-            foreach (var spriteCharacter in tmpEmojiSpriteAsset.spriteCharacterTable)
+            // Build the TMP_SpriteAsset ourselves instead of calling TMP_SpriteAssetMenu.CreateSpriteAsset(),
+            // which is no longer public in the TextMeshPro version bundled with com.unity.ugui (Unity 6+).
+            TMP_SpriteAsset tmpEmojiSpriteAsset = AssetDatabase.LoadAssetAtPath<TMP_SpriteAsset>(spriteAssetPath);
+            bool isNewAsset = tmpEmojiSpriteAsset == null;
+            if (isNewAsset)
             {
-                string codePoint = emojiSpriteUnicodeMapping[spriteCharacter.name];
-                uint.TryParse(codePoint, NumberStyles.HexNumber, CultureInfo.CurrentCulture, out var unicode);
-                spriteCharacter.unicode = unicode;
-                spriteCharacter.glyph.glyphRect = new GlyphRect(spriteCharacter.glyph.glyphRect.x + 1,
-                    spriteCharacter.glyph.glyphRect.y + 1, glyphSize, glyphSize);
-                spriteCharacter.glyph.metrics = new GlyphMetrics(glyphSize, glyphSize, 0, glyphSize, glyphSize);
+                tmpEmojiSpriteAsset = ScriptableObject.CreateInstance<TMP_SpriteAsset>();
+                tmpEmojiSpriteAsset.name = Path.GetFileNameWithoutExtension(spriteAssetPath);
             }
 
+            // Mark the asset as the current format so TMP does not run its legacy upgrade path
+            // (which would clear the sprite tables) when the asset is loaded, and set its name hash.
+            // Done through SerializedObject because these members are not publicly settable in every TMP version.
+            SerializedObject serializedSpriteAsset = new SerializedObject(tmpEmojiSpriteAsset);
+            SetStringProperty(serializedSpriteAsset, "1.1.0", "m_Version");
+            SetIntProperty(serializedSpriteAsset, TMP_TextUtilities.GetSimpleHashCode(tmpEmojiSpriteAsset.name),
+                "m_HashCode", "hashCode");
+            serializedSpriteAsset.ApplyModifiedPropertiesWithoutUndo();
+
+            tmpEmojiSpriteAsset.spriteSheet = emojiTexture;
+            tmpEmojiSpriteAsset.spriteGlyphTable.Clear();
+            tmpEmojiSpriteAsset.spriteCharacterTable.Clear();
+
+            // Same ordering as TextMeshPro's own sprite asset creation: top-to-bottom, left-to-right.
+            List<Sprite> sprites = new List<Sprite>();
+            foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(emojiTexturePath))
+            {
+                if (asset is Sprite sprite) sprites.Add(sprite);
+            }
+
+            sprites.Sort((a, b) =>
+            {
+                int compareY = b.rect.y.CompareTo(a.rect.y);
+                return compareY != 0 ? compareY : a.rect.x.CompareTo(b.rect.x);
+            });
+
+            uint glyphIndex = 0;
+            foreach (Sprite sprite in sprites)
+            {
+                if (!emojiSpriteUnicodeMapping.TryGetValue(sprite.name, out string codePoint))
+                {
+                    Debug.LogWarning($"Sprite {sprite.name} Skipped: no matching emoji data");
+                    continue;
+                }
+
+                uint.TryParse(codePoint, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var unicode);
+
+                TMP_SpriteGlyph spriteGlyph = new TMP_SpriteGlyph
+                {
+                    index = glyphIndex,
+                    metrics = new GlyphMetrics(glyphSize, glyphSize, 0, glyphSize, glyphSize),
+                    glyphRect = new GlyphRect((int)sprite.rect.x + 1, (int)sprite.rect.y + 1, glyphSize, glyphSize),
+                    scale = 1.0f,
+                    atlasIndex = 0,
+                    sprite = sprite
+                };
+                tmpEmojiSpriteAsset.spriteGlyphTable.Add(spriteGlyph);
+
+                TMP_SpriteCharacter spriteCharacter = new TMP_SpriteCharacter(unicode, spriteGlyph)
+                {
+                    name = sprite.name,
+                    scale = 1.0f
+                };
+                tmpEmojiSpriteAsset.spriteCharacterTable.Add(spriteCharacter);
+
+                glyphIndex++;
+            }
+
+            if (isNewAsset)
+            {
+                AssetDatabase.CreateAsset(tmpEmojiSpriteAsset, spriteAssetPath);
+            }
+
+            EnsureSpriteAssetMaterial(tmpEmojiSpriteAsset, emojiTexture);
+
+            tmpEmojiSpriteAsset.UpdateLookupTables();
+            EditorUtility.SetDirty(tmpEmojiSpriteAsset);
             AssetDatabase.SaveAssets();
-            AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(tmpEmojiSpriteAsset));
+            AssetDatabase.ImportAsset(spriteAssetPath);
+        }
+
+        private static SerializedProperty FindFirstProperty(SerializedObject serializedObject,
+            params string[] propertyNames)
+        {
+            foreach (string propertyName in propertyNames)
+            {
+                SerializedProperty property = serializedObject.FindProperty(propertyName);
+                if (property != null) return property;
+            }
+
+            Debug.LogWarning($"TMP_SpriteAsset has no serialized property named {string.Join(" / ", propertyNames)}");
+            return null;
+        }
+
+        private static void SetStringProperty(SerializedObject serializedObject, string value,
+            params string[] propertyNames)
+        {
+            SerializedProperty property = FindFirstProperty(serializedObject, propertyNames);
+            if (property != null) property.stringValue = value;
+        }
+
+        private static void SetIntProperty(SerializedObject serializedObject, int value, params string[] propertyNames)
+        {
+            SerializedProperty property = FindFirstProperty(serializedObject, propertyNames);
+            if (property != null) property.intValue = value;
+        }
+
+        private static void EnsureSpriteAssetMaterial(TMP_SpriteAsset spriteAsset, Texture2D spriteSheet)
+        {
+            Material material = spriteAsset.material;
+            if (material == null)
+            {
+                Shader shader = Shader.Find("TextMeshPro/Sprite");
+                if (shader == null)
+                {
+                    Debug.LogError("Failed to find shader TextMeshPro/Sprite. Are the TMP Essential Resources imported?");
+                    return;
+                }
+
+                material = new Material(shader)
+                {
+                    name = spriteAsset.name + " Material",
+                    hideFlags = HideFlags.HideInHierarchy
+                };
+                AssetDatabase.AddObjectToAsset(material, spriteAsset);
+
+                SerializedObject serializedSpriteAsset = new SerializedObject(spriteAsset);
+                SerializedProperty materialProperty =
+                    FindFirstProperty(serializedSpriteAsset, "m_Material", "material");
+                if (materialProperty != null) materialProperty.objectReferenceValue = material;
+                SetIntProperty(serializedSpriteAsset, TMP_TextUtilities.GetSimpleHashCode(material.name),
+                    "m_MaterialHashCode", "materialHashCode");
+                serializedSpriteAsset.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            material.SetTexture("_MainTex", spriteSheet);
+            EditorUtility.SetDirty(material);
         }
 
         #region Utility Functions
