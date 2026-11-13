@@ -37,16 +37,26 @@ Add this line to the dependecies:
 
 # Usage
 
-1. Download one of the emoji sprite sheet image and `emoji.json` from `https://github.com/iamcal/emoji-data`
-2. Copy the downloaded sprite sheet image and json file into your Unity project
-3. Open the tool from the menu bar, <b>Emoji > TextMeshPro Emoji Generator</b>
-4. Select the downloaded emoji sprite sheet image and json file in the editor window, select target platform (Twitter by default) of
-   the downloaded emoji sprite sheet image
-5. Click <b>Generate TextMeshPro Emoji Sprite Asset</b> button and the sprite asset supported by TextMeshPro will be
-   generated next to the emoji sprite sheet image
-6. Open <b>Project Settings > TextMesh Pro > Settings > Default Sprite Asset</b>, select the newly generated sprite
-   asset
+1. Download one emoji sprite sheet image and `emoji.json` from `https://github.com/iamcal/emoji-data`.
+2. Put the sprite sheet image and `emoji.json` in the same folder in your Unity project.
+   Do not change the name of the sprite sheet image (for example, `sheet_twitter_64.png`).
+3. In the Project window, right-click the sprite sheet image.
+4. Select <b>Create > TextMeshPro > Emoji Sprite Asset</b>.
+   The tool makes the TextMesh Pro sprite asset in the same folder as the sprite sheet image.
+5. Open <b>Project Settings > TextMesh Pro > Settings > Default Sprite Asset</b> and select the new sprite asset.
+
+The tool finds these values automatically:
+
+- Emoji data file: the `emoji.json` (or `emoji_pretty.json`) in the same folder as the sprite sheet image.
+  If that folder has no data file, the tool uses the only `emoji.json` in the project.
+- Platform: from the name of the sprite sheet image (`apple`, `google`, `twitter` or `facebook`).
+- Emoji size: from the width of the sprite sheet image and the number of columns in `emoji.json`.
+- Import settings: the tool sets the sprite sheet image to Texture Type <b>Sprite</b> and Sprite Mode <b>Multiple</b>.
 
 # Limitations
 
-- Emoji with longer unicode (exceed UTF-32) are not supported, limited by TextMeshPro's unicode size
+- A TextMesh Pro sprite character can have only one unicode value.
+  The tool removes the emoji variation selector (`FE0F`) from each emoji.
+  Emoji sequences (keycaps, flags and ZWJ sequences such as family emoji) have more than one code point.
+  These emoji have no unicode value in the sprite asset. To show them, use the sprite name,
+  for example `<sprite name="0023-fe0f-20e3">`.

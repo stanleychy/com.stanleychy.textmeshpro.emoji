@@ -12,14 +12,21 @@ namespace TMP_Emoji.Editor
 {
     public static class TMP_EmojiSpriteSheetGenerator
     {
-        public static void GenerateEmojiSpriteData(Texture2D emojiTexture, TextAsset emojiDataJsonFile,
-            TMP_EmojiPlatformType tmpEmojiPlatformType, int emojiSize = 64)
+        /// <summary>
+        /// Generates the sprites and the TMP sprite asset for an emoji sprite sheet from emoji-data.
+        /// The emoji data file, the platform and the emoji size are found from the sprite sheet.
+        /// See <see cref="TMP_EmojiSourceResolver"/>.
+        /// </summary>
+        public static void GenerateEmojiSpriteData(Texture2D emojiTexture)
         {
-            if (emojiTexture == null || emojiDataJsonFile == null)
+            if (emojiTexture == null)
             {
-                Debug.LogError("Missing input file");
+                Debug.LogError("Missing Emoji texture");
                 return;
             }
+
+            if (!TMP_EmojiSourceResolver.TryFindEmojiDataFile(emojiTexture, out TextAsset emojiDataJsonFile)) return;
+            if (!TMP_EmojiSourceResolver.TryGetPlatformType(emojiTexture, out TMP_EmojiPlatformType tmpEmojiPlatformType)) return;
 
             if (!GetImageSize(emojiTexture, out var textureWidth, out var textureHeight))
             {
@@ -37,7 +44,7 @@ namespace TMP_Emoji.Editor
                 return;
             }
 
-            if (!IsEmojiSizeValid(emojiDataList, textureWidth, emojiSize)) return;
+            if (!TMP_EmojiSourceResolver.TryGetEmojiSize(emojiDataList, textureWidth, out int emojiSize)) return;
 
             if (!EnsureMultipleSpriteImport(emojiTexture))
             {
@@ -60,7 +67,8 @@ namespace TMP_Emoji.Editor
             {
                 if (!IsEmojiDataSupported(emojiData, tmpEmojiPlatformType)) continue;
 
-                string newSpriteName = emojiData.image;
+                // Without ".png", so the name is easy to use in <sprite name="...">.
+                string newSpriteName = Path.GetFileNameWithoutExtension(emojiData.image);
                 GUID newSpriteGuid = GUID.Generate();
 
                 newEmojiSprites.Add(new SpriteRect
@@ -347,32 +355,6 @@ namespace TMP_Emoji.Editor
             importer.spriteImportMode = SpriteImportMode.Multiple;
             importer.SaveAndReimport();
             return true;
-        }
-
-        /// <summary>
-        /// Checks that the emoji size matches the sprite sheet. Each grid cell is the emoji size plus
-        /// 1 pixel of padding on each side, and the number of columns comes from the largest sheet_x.
-        /// Logs the expected emoji size when it does not match.
-        /// </summary>
-        private static bool IsEmojiSizeValid(TMP_EmojiData[] emojiDataList, int textureWidth, int emojiSize)
-        {
-            int columnCount = 0;
-            foreach (TMP_EmojiData emojiData in emojiDataList)
-            {
-                if (emojiData.sheet_x + 1 > columnCount) columnCount = emojiData.sheet_x + 1;
-            }
-
-            if (columnCount == 0)
-            {
-                Debug.LogError("Emoji JSON data file has no sprite sheet positions");
-                return false;
-            }
-
-            if (emojiSize > 0 && textureWidth == columnCount * (emojiSize + 2)) return true;
-
-            Debug.LogError($"Emoji Size {emojiSize} does not match the sprite sheet: {textureWidth} px wide with " +
-                           $"{columnCount} columns. Expected Emoji Size: {textureWidth / columnCount - 2}");
-            return false;
         }
 
         private static bool IsEmojiDataSupported(TMP_EmojiData tmpEmojiData, TMP_EmojiPlatformType tmpEmojiPlatformType)
