@@ -44,7 +44,7 @@ namespace TMP_Emoji.Editor
 
             List<SpriteRect> newEmojiSprites = new List<SpriteRect>();
             List<SpriteNameFileIdPair> spriteNameFileIdPairs = new List<SpriteNameFileIdPair>();
-            Dictionary<string, string> emojiSpriteUnicodeMapping = new Dictionary<string, string>();
+            Dictionary<string, uint> emojiSpriteUnicodeMapping = new Dictionary<string, uint>();
 
             int emojiGridSize = emojiSize + 2;
 
@@ -70,7 +70,7 @@ namespace TMP_Emoji.Editor
 
                 spriteNameFileIdPairs.Add(new SpriteNameFileIdPair(newSpriteName, newSpriteGuid));
 
-                emojiSpriteUnicodeMapping[newSpriteName] = string.Concat(emojiData.unified.Split('-'));
+                emojiSpriteUnicodeMapping[newSpriteName] = GetSpriteUnicode(emojiData.unified);
             }
 
 #if UNITY_2021_2_OR_NEWER
@@ -100,7 +100,7 @@ namespace TMP_Emoji.Editor
         /// TMP_SpriteAssetMenu.CreateSpriteAsset() is not public in this version, so the asset is built here.
         /// An existing asset at the same path is reused when the sprite sheet is generated again.
         /// </summary>
-        private static void GenerateTMPEmojiSpriteAsset(Dictionary<string, string> emojiSpriteUnicodeMapping,
+        private static void GenerateTMPEmojiSpriteAsset(Dictionary<string, uint> emojiSpriteUnicodeMapping,
             Texture2D emojiTexture, int emojiSize)
         {
             string emojiTexturePath = AssetDatabase.GetAssetPath(emojiTexture);
@@ -218,7 +218,7 @@ namespace TMP_Emoji.Editor
         /// TMP_SpriteAssetMenu.CreateSpriteAsset() is public in this version and sets up the asset,
         /// its material and its hash codes. Only the unicode values and glyph sizes are changed after it.
         /// </summary>
-        private static void GenerateTMPEmojiSpriteAsset(Dictionary<string, string> emojiSpriteUnicodeMapping,
+        private static void GenerateTMPEmojiSpriteAsset(Dictionary<string, uint> emojiSpriteUnicodeMapping,
             Texture2D emojiTexture, int emojiSize)
         {
             string emojiTexturePath = AssetDatabase.GetAssetPath(emojiTexture);
@@ -253,21 +253,51 @@ namespace TMP_Emoji.Editor
 #endif
 
         /// <summary>
-        /// Finds the emoji code point for a sprite name and parses it as a hexadecimal unicode value.
-        /// Logs a warning and returns false when the sprite has no emoji data.
+        /// Unicode value TextMeshPro gives to a sprite that has no unicode. TMP leaves these sprites out of the
+        /// unicode lookup, but they are still available by name with &lt;sprite name="..."&gt;.
         /// </summary>
-        private static bool TryGetUnicode(Dictionary<string, string> emojiSpriteUnicodeMapping, string spriteName,
-            out uint unicode)
+        private const uint NoUnicode = 0xFFFE;
+
+        /// <summary>
+        /// Variation selector-16 (emoji presentation). It only selects the emoji style of the code point before it.
+        /// </summary>
+        private const string EmojiVariationSelector = "FE0F";
+
+        /// <summary>
+        /// Converts an emoji "unified" value (for example "00A9-FE0F" or "1F468-200D-1F469") to the one unicode value
+        /// a TMP sprite character can hold. The variation selector is removed first. When one code point remains,
+        /// it is the unicode value. Sequences (keycaps, ZWJ sequences, flags) cannot be stored as one unicode value,
+        /// so they get <see cref="NoUnicode"/>.
+        /// </summary>
+        private static uint GetSpriteUnicode(string unified)
         {
-            unicode = 0;
-            if (!emojiSpriteUnicodeMapping.TryGetValue(spriteName, out string codePoint))
+            string codePoint = null;
+            foreach (string part in unified.Split('-'))
             {
-                Debug.LogWarning($"Sprite {spriteName} Skipped: no matching emoji data");
-                return false;
+                if (string.Equals(part, EmojiVariationSelector, System.StringComparison.OrdinalIgnoreCase)) continue;
+                if (codePoint != null) return NoUnicode;
+
+                codePoint = part;
             }
 
-            uint.TryParse(codePoint, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out unicode);
-            return true;
+            if (codePoint == null) return NoUnicode;
+
+            return uint.TryParse(codePoint, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint unicode)
+                ? unicode
+                : NoUnicode;
+        }
+
+        /// <summary>
+        /// Finds the unicode value for a sprite name.
+        /// Logs a warning and returns false when the sprite has no emoji data.
+        /// </summary>
+        private static bool TryGetUnicode(Dictionary<string, uint> emojiSpriteUnicodeMapping, string spriteName,
+            out uint unicode)
+        {
+            if (emojiSpriteUnicodeMapping.TryGetValue(spriteName, out unicode)) return true;
+
+            Debug.LogWarning($"Sprite {spriteName} Skipped: no matching emoji data");
+            return false;
         }
 
         /// <summary>
@@ -290,13 +320,6 @@ namespace TMP_Emoji.Editor
             if (string.IsNullOrEmpty(tmpEmojiData.image))
             {
                 Debug.LogWarning($"Emoji {tmpEmojiData.name} Skipped: image file name is null or empty");
-                return false;
-            }
-
-            if (tmpEmojiData.unified.Length > 9)
-            {
-                Debug.LogWarning(
-                    $"Emoji {tmpEmojiData.name} Skipped: unicode {tmpEmojiData.unified} is too long for TextMeshPro");
                 return false;
             }
 
