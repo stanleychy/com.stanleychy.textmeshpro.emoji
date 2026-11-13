@@ -1,6 +1,6 @@
 {
   "name": "com.stanleychy.textmeshpro.emoji",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "displayName": "TextMeshPro Emoji",
   "description": "This is an editor tool to make integrating Emoji with TextMeshPro easier",
   "unity": "2022.3",
