@@ -112,13 +112,15 @@ namespace TMP_Emoji.Editor
             }
 
             // Mark the asset as the current format so TMP does not run its legacy upgrade path
-            // (which would clear the sprite tables) when the asset is loaded, and set its name hash.
-            // Done through SerializedObject because these members are not publicly settable in every TMP version.
+            // (which would clear the sprite tables) when the asset is loaded.
+            // Done through SerializedObject because the version setter is internal in TMP.
             SerializedObject serializedSpriteAsset = new SerializedObject(tmpEmojiSpriteAsset);
-            SetStringProperty(serializedSpriteAsset, "1.1.0", "m_Version");
-            SetIntProperty(serializedSpriteAsset, TMP_TextUtilities.GetSimpleHashCode(tmpEmojiSpriteAsset.name),
-                "m_HashCode", "hashCode");
+            serializedSpriteAsset.FindProperty("m_Version").stringValue = "1.1.0";
             serializedSpriteAsset.ApplyModifiedPropertiesWithoutUndo();
+
+            // Same as TextMeshPro's own sprite asset creation. This member is a public field in TMP 3.0.x and
+            // a public property (backed by a non-serialized cache) in the TMP bundled with com.unity.ugui 2.0.
+            tmpEmojiSpriteAsset.hashCode = TMP_TextUtilities.GetSimpleHashCode(tmpEmojiSpriteAsset.name);
 
             tmpEmojiSpriteAsset.spriteSheet = emojiTexture;
             tmpEmojiSpriteAsset.spriteGlyphTable.Clear();
@@ -182,32 +184,6 @@ namespace TMP_Emoji.Editor
             AssetDatabase.ImportAsset(spriteAssetPath);
         }
 
-        private static SerializedProperty FindFirstProperty(SerializedObject serializedObject,
-            params string[] propertyNames)
-        {
-            foreach (string propertyName in propertyNames)
-            {
-                SerializedProperty property = serializedObject.FindProperty(propertyName);
-                if (property != null) return property;
-            }
-
-            Debug.LogWarning($"TMP_SpriteAsset has no serialized property named {string.Join(" / ", propertyNames)}");
-            return null;
-        }
-
-        private static void SetStringProperty(SerializedObject serializedObject, string value,
-            params string[] propertyNames)
-        {
-            SerializedProperty property = FindFirstProperty(serializedObject, propertyNames);
-            if (property != null) property.stringValue = value;
-        }
-
-        private static void SetIntProperty(SerializedObject serializedObject, int value, params string[] propertyNames)
-        {
-            SerializedProperty property = FindFirstProperty(serializedObject, propertyNames);
-            if (property != null) property.intValue = value;
-        }
-
         private static void EnsureSpriteAssetMaterial(TMP_SpriteAsset spriteAsset, Texture2D spriteSheet)
         {
             Material material = spriteAsset.material;
@@ -227,13 +203,9 @@ namespace TMP_Emoji.Editor
                 };
                 AssetDatabase.AddObjectToAsset(material, spriteAsset);
 
-                SerializedObject serializedSpriteAsset = new SerializedObject(spriteAsset);
-                SerializedProperty materialProperty =
-                    FindFirstProperty(serializedSpriteAsset, "m_Material", "material");
-                if (materialProperty != null) materialProperty.objectReferenceValue = material;
-                SetIntProperty(serializedSpriteAsset, TMP_TextUtilities.GetSimpleHashCode(material.name),
-                    "m_MaterialHashCode", "materialHashCode");
-                serializedSpriteAsset.ApplyModifiedPropertiesWithoutUndo();
+                // Public in every supported TMP version, so no SerializedObject is needed.
+                spriteAsset.material = material;
+                spriteAsset.materialHashCode = TMP_TextUtilities.GetSimpleHashCode(material.name);
             }
 
             material.SetTexture("_MainTex", spriteSheet);
