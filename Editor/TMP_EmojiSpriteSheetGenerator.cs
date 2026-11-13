@@ -121,7 +121,6 @@ namespace TMP_Emoji.Editor
         {
             string emojiTexturePath = AssetDatabase.GetAssetPath(emojiTexture);
             string spriteAssetPath = Path.ChangeExtension(emojiTexturePath, "asset");
-            int glyphSize = emojiSize / 2;
 
             TMP_SpriteAsset tmpEmojiSpriteAsset = AssetDatabase.LoadAssetAtPath<TMP_SpriteAsset>(spriteAssetPath);
             bool isNewAsset = tmpEmojiSpriteAsset == null;
@@ -173,8 +172,8 @@ namespace TMP_Emoji.Editor
                 TMP_SpriteGlyph spriteGlyph = new TMP_SpriteGlyph
                 {
                     index = glyphIndex,
-                    metrics = CreateGlyphMetrics(glyphSize),
-                    glyphRect = CreateGlyphRect((int)sprite.rect.x, (int)sprite.rect.y, glyphSize),
+                    metrics = CreateGlyphMetrics(emojiSize),
+                    glyphRect = CreateGlyphRect((int)sprite.rect.x, (int)sprite.rect.y, emojiSize),
                     scale = 1.0f,
                     atlasIndex = 0,
                     sprite = sprite
@@ -244,7 +243,6 @@ namespace TMP_Emoji.Editor
             Texture2D emojiTexture, int emojiSize)
         {
             string emojiTexturePath = AssetDatabase.GetAssetPath(emojiTexture);
-            int glyphSize = emojiSize / 2;
 
             Selection.activeObject = emojiTexture;
             TMP_SpriteAssetMenu.CreateSpriteAsset();
@@ -263,8 +261,8 @@ namespace TMP_Emoji.Editor
 
                 spriteCharacter.unicode = unicode;
                 spriteCharacter.glyph.glyphRect = CreateGlyphRect(spriteCharacter.glyph.glyphRect.x,
-                    spriteCharacter.glyph.glyphRect.y, glyphSize);
-                spriteCharacter.glyph.metrics = CreateGlyphMetrics(glyphSize);
+                    spriteCharacter.glyph.glyphRect.y, emojiSize);
+                spriteCharacter.glyph.metrics = CreateGlyphMetrics(emojiSize);
             }
 
             tmpEmojiSpriteAsset.UpdateLookupTables();
@@ -323,16 +321,21 @@ namespace TMP_Emoji.Editor
         }
 
         /// <summary>
-        /// Glyph rect inside one emoji grid cell. Each cell has a 1 pixel padding around the emoji.
+        /// Glyph rect of the full emoji inside one grid cell. Each cell has 1 pixel of padding around the emoji,
+        /// so the emoji starts 1 pixel in from the cell corner and is <paramref name="emojiSize"/> pixels square.
         /// </summary>
-        private static GlyphRect CreateGlyphRect(int cellX, int cellY, int glyphSize)
+        private static GlyphRect CreateGlyphRect(int cellX, int cellY, int emojiSize)
         {
-            return new GlyphRect(cellX + 1, cellY + 1, glyphSize, glyphSize);
+            return new GlyphRect(cellX + 1, cellY + 1, emojiSize, emojiSize);
         }
 
-        private static GlyphMetrics CreateGlyphMetrics(int glyphSize)
+        /// <summary>
+        /// Same metrics TextMeshPro gives a sprite with a bottom-left pivot: the emoji stands on the baseline and
+        /// advances by its width. TMP scales the glyph height to the font's ascent line when it renders the sprite.
+        /// </summary>
+        private static GlyphMetrics CreateGlyphMetrics(int emojiSize)
         {
-            return new GlyphMetrics(glyphSize, glyphSize, 0, glyphSize, glyphSize);
+            return new GlyphMetrics(emojiSize, emojiSize, 0, emojiSize, emojiSize);
         }
 
         #region Utility Functions
