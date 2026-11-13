@@ -27,11 +27,6 @@ namespace TMP_Emoji.Editor
                 return;
             }
 
-            SpriteDataProviderFactories factory = new SpriteDataProviderFactories();
-            factory.Init();
-            ISpriteEditorDataProvider dataProvider = factory.GetSpriteEditorDataProviderFromObject(emojiTexture);
-            dataProvider.InitSpriteEditorDataProvider();
-
             string emojiDataText = $"{{\"items\": {emojiDataJsonFile.text}}}";
             TMP_EmojiDataWrapper tmpEmojiDataListWrapper = JsonUtility.FromJson<TMP_EmojiDataWrapper>(emojiDataText);
             TMP_EmojiData[] emojiDataList = tmpEmojiDataListWrapper.items;
@@ -41,6 +36,19 @@ namespace TMP_Emoji.Editor
                 Debug.LogError("Failed to parse Emoji JSON data file");
                 return;
             }
+
+            if (!IsEmojiSizeValid(emojiDataList, textureWidth, emojiSize)) return;
+
+            if (!EnsureMultipleSpriteImport(emojiTexture))
+            {
+                Debug.LogError("Failed to set Emoji texture import to Sprite (Multiple)");
+                return;
+            }
+
+            SpriteDataProviderFactories factory = new SpriteDataProviderFactories();
+            factory.Init();
+            ISpriteEditorDataProvider dataProvider = factory.GetSpriteEditorDataProviderFromObject(emojiTexture);
+            dataProvider.InitSpriteEditorDataProvider();
 
             List<SpriteRect> newEmojiSprites = new List<SpriteRect>();
             List<SpriteNameFileIdPair> spriteNameFileIdPairs = new List<SpriteNameFileIdPair>();
@@ -135,6 +143,12 @@ namespace TMP_Emoji.Editor
             foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(emojiTexturePath))
             {
                 if (asset is Sprite sprite) sprites.Add(sprite);
+            }
+
+            if (sprites.Count == 0)
+            {
+                Debug.LogError($"Emoji texture {emojiTexturePath} has no sprites. Check its import settings.");
+                return;
             }
 
             sprites.Sort((a, b) =>
@@ -314,6 +328,52 @@ namespace TMP_Emoji.Editor
         }
 
         #region Utility Functions
+
+        /// <summary>
+        /// Sets the texture import to Sprite with Sprite Mode Multiple, and re-imports it when a change is needed.
+        /// Unity only keeps the sprite rects of a texture in this mode. In other modes no sprites are created,
+        /// and the TMP sprite asset gets no glyphs or characters.
+        /// </summary>
+        private static bool EnsureMultipleSpriteImport(Texture2D texture)
+        {
+            string texturePath = AssetDatabase.GetAssetPath(texture);
+            TextureImporter importer = AssetImporter.GetAtPath(texturePath) as TextureImporter;
+            if (importer == null) return false;
+
+            if (importer.textureType == TextureImporterType.Sprite &&
+                importer.spriteImportMode == SpriteImportMode.Multiple) return true;
+
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Multiple;
+            importer.SaveAndReimport();
+            return true;
+        }
+
+        /// <summary>
+        /// Checks that the emoji size matches the sprite sheet. Each grid cell is the emoji size plus
+        /// 1 pixel of padding on each side, and the number of columns comes from the largest sheet_x.
+        /// Logs the expected emoji size when it does not match.
+        /// </summary>
+        private static bool IsEmojiSizeValid(TMP_EmojiData[] emojiDataList, int textureWidth, int emojiSize)
+        {
+            int columnCount = 0;
+            foreach (TMP_EmojiData emojiData in emojiDataList)
+            {
+                if (emojiData.sheet_x + 1 > columnCount) columnCount = emojiData.sheet_x + 1;
+            }
+
+            if (columnCount == 0)
+            {
+                Debug.LogError("Emoji JSON data file has no sprite sheet positions");
+                return false;
+            }
+
+            if (emojiSize > 0 && textureWidth == columnCount * (emojiSize + 2)) return true;
+
+            Debug.LogError($"Emoji Size {emojiSize} does not match the sprite sheet: {textureWidth} px wide with " +
+                           $"{columnCount} columns. Expected Emoji Size: {textureWidth / columnCount - 2}");
+            return false;
+        }
 
         private static bool IsEmojiDataSupported(TMP_EmojiData tmpEmojiData, TMP_EmojiPlatformType tmpEmojiPlatformType)
         {
